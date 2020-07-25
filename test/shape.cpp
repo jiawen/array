@@ -467,11 +467,11 @@ TEST(shape_optimize) {
 
 TEST(shape_make_compact) {
   shape<dim<>> s1({3, 5, 2});
-  shape<dim<>> s1_compact({3, 5, 1});
+  shape<dense_dim<>> s1_compact({3, 5});
   ASSERT_EQ(make_compact(s1), s1_compact);
 
   shape<dim<>, dim<>> s2({3, 5, 8}, {1, 4, 1});
-  shape<dim<>, dim<>> s2_compact({3, 5, 1}, {1, 4, 5});
+  shape<dense_dim<>, dim<>> s2_compact({3, 5}, {1, 4, 5});
   ASSERT_EQ(make_compact(s2), s2_compact);
 
   shape<dim<>, dense_dim<>> s3({3, 5, 8}, {1, 4});

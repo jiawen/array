@@ -1203,9 +1203,9 @@ auto make_dense_shape(const Shape& dims, index_sequence<Is...>) {
       dim<>(std::get<Is + 1>(dims).min(), std::get<Is + 1>(dims).extent())...);
 }
 
-template <class Shape, size_t... Is>
-Shape without_strides(const Shape& s, index_sequence<Is...>) {
-  return {{s.template dim<Is>().min(), s.template dim<Is>().extent()}...};
+template <class Dims, size_t... Is>
+Dims without_strides(const Dims& s, index_sequence<Is...>) {
+  return {{std::get<Is>(s).min(), std::get<Is>(s).extent()}...};
 }
 
 template <index_t Min, index_t Extent, index_t Stride, class DimSrc>
@@ -1305,18 +1305,50 @@ auto make_dense(const shape<Dims...>& s) {
 }
 inline auto make_dense(const shape<>& s) { return s; }
 
+namespace internal {
+
+template <class, class>
+struct TupleCat;
+template <class... First, class... Second>
+struct TupleCat<std::tuple<First...>, std::tuple<Second...>> {
+    using type = std::tuple<First..., Second...>;
+};
+
+template <index_t NextStride, class... Dims>
+struct make_compact_static {
+  using type = std::tuple<Dims...>;
+};
+
+template <class... Dims>
+struct make_compact_static<dynamic, Dims...> {
+  using type = std::tuple<Dims...>;
+};
+
+template <index_t NextStride, index_t Min, index_t Extent, class... Dims>
+struct make_compact_static<NextStride, dim<Min, Extent, dynamic>, Dims...> {
+  using type = typename TupleCat<
+      std::tuple<dim<Min, Extent, NextStride>>,
+      typename make_compact_static<static_mul(NextStride, Extent), Dims...>::type>::type;
+};
+
+}  // namespace internal
+
 /** Replace the strides of `s` with minimal strides, as determined by
  * the `shape::resolve` algorithm. The strides of `s` are replaced with
  * a possibly different order, even if the shape is already compact.
  *
  * The resulting shape may not have `Shape::is_compact` return `true`
  * if the shape has non-compact compile-time constant strides. */
-template <class Shape>
-Shape make_compact(const Shape& s) {
-  Shape without_strides =
-      internal::without_strides(s, internal::make_index_sequence<Shape::rank()>());
-  without_strides.resolve();
-  return without_strides;
+template <class... Dims>
+auto make_compact(const shape<Dims...>& s) {
+  constexpr index_t NextStride =
+      internal::variadic_max(1, internal::static_mul(Dims::Stride, Dims::Extent)...);
+  using CompactDims = typename internal::make_compact_static<NextStride, Dims...>::type;
+  CompactDims without_strides =
+      internal::without_strides(s.dims(), internal::make_index_sequence<sizeof...(Dims)>());
+  auto result = make_shape_from_tuple(without_strides);
+  result.resolve();
+  return result;
 }
 
 /** Returns `true` if a shape `src` can be assigned to a shape of type
